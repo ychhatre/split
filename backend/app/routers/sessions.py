@@ -4,6 +4,7 @@ from app.database import get_db
 from app.models import Session as SessionModel, SessionUser
 from app.schemas import SessionCreate, SessionResponse, SessionStatusResponse, UserJoin, UserSelectItems, UserResponse, MarkPaid
 from app.receipt_parser import calculate_user_totals
+from app.config import FRONTEND_URL
 import uuid
 import qrcode
 from io import BytesIO
@@ -23,8 +24,7 @@ async def create_session(session_data: SessionCreate, db: Session = Depends(get_
     session_id = session_data.session_id if hasattr(session_data, 'session_id') and session_data.session_id else str(uuid.uuid4())
     
     # Generate QR code
-    # Assuming frontend URL will be passed or configured
-    qr_data = f"http://localhost:3000/session/{session_id}"
+    qr_data = f"{FRONTEND_URL}/session/{session_id}"
     qr = qrcode.QRCode(version=1, box_size=10, border=5)
     qr.add_data(qr_data)
     qr.make(fit=True)
