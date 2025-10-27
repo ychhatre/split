@@ -1,13 +1,25 @@
 import axios from 'axios';
 
-// Get the hostname dynamically for network access
+// Get the API URL based on environment
 const getApiUrl = () => {
-  if (typeof window !== 'undefined') {
-    // If running in browser, use the same host but port 8000
-    const host = window.location.hostname;
-    return process.env.NEXT_PUBLIC_API_URL || `http://${host}:8000`;
+  // If NEXT_PUBLIC_API_URL is explicitly set, use it (for production)
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
   }
-  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+  
+  // Check if we're in production (hosted environment)
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    // If hostname is localhost or a local IP, use local backend
+    if (host === 'localhost' || host === '127.0.0.1' || host.startsWith('192.168.') || host.startsWith('10.0.')) {
+      return `http://${host}:8000`;
+    }
+    // Otherwise, use the production Lambda URL
+    return 'https://tl4hbolniutrcuwr5cv4hyqvzq0zaevo.lambda-url.us-west-1.on.aws';
+  }
+  
+  // Default fallback for server-side rendering
+  return 'http://localhost:8000';
 };
 
 const API_BASE_URL = getApiUrl();
@@ -53,7 +65,7 @@ export interface SessionResponse {
   receipt_items: ReceiptItem[];
   item_splits?: Record<string, any>;
   claimed_items?: Record<string, any>;
-  number_of_guests?: number;
+  number_of_guests: number;
   tax_amount: number;
   tip_amount: number;
   subtotal: number;
@@ -67,13 +79,8 @@ export interface UserJoin {
   name: string;
 }
 
-export interface ItemSplit {
-  item_id: string;
-  split_count: number;
-}
-
 export interface UserSelectItems {
-  item_splits: ItemSplit[];
+  item_ids: string[];
   payment_method?: string;
   payment_handle?: string;
 }
