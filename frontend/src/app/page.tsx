@@ -95,7 +95,7 @@ export default function Home() {
         <div className="max-w-2xl mx-auto">
           <div className="bg-white rounded-2xl shadow-xl p-8">
             <h1 className="text-4xl font-bold text-gray-900 mb-2">
-              Split
+              Cheque
             </h1>
             <p className="text-gray-600 mb-8">
               Split restaurant bills easily. Scan your receipt and let everyone pay their share.
