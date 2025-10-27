@@ -10,8 +10,8 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 
-# Create database tables
-Base.metadata.create_all(bind=engine)
+# Database tables will be created on first use, not on startup
+# This prevents Lambda initialization timeouts and connection errors
 
 app = FastAPI(
     title="Split - Receipt Splitting API",
@@ -19,6 +19,17 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc"
 )
+
+# Add startup event to create tables (optional)
+@app.on_event("startup")
+async def startup_event():
+    """Create database tables on startup if they don't exist"""
+    from app.database import init_database
+    success = init_database()
+    if success:
+        logging.info("Database tables created successfully")
+    else:
+        logging.warning("Database tables could not be created - will be created on first use")
 
 # Configure CORS - Allow all origins for development
 app.add_middleware(
