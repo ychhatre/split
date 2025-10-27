@@ -1,0 +1,120 @@
+name: Deploy Backend to ECR and Update Lambda
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'backend/**'
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'backend/**'
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: split-backend
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Build, tag, and push image to Amazon ECR
+      id: build-image
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        # Build a docker container and push it to ECR so that it can
+        # be deployed to ECS.
+        cd backend
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+        echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+    - name: Update Lambda function with new image
+      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        # Update Lambda function to use the new image
+        LAMBDA_FUNCTION_NAME="${{ secrets.LAMBDA_FUNCTION_NAME || 'split-backend-lambda' }}"
+        IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+        
+        # Check if Lambda function exists
+        if aws lambda get-function --function-name $LAMBDA_FUNCTION_NAME >/dev/null 2>&1; then
+          echo "Updating Lambda function: $LAMBDA_FUNCTION_NAME"
+          aws lambda update-function-code \
+            --function-name $LAMBDA_FUNCTION_NAME \
+            --image-uri $IMAGE_URI
+          
+          # Wait for the update to complete
+          aws lambda wait function-updated --function-name $LAMBDA_FUNCTION_NAME
+          
+          echo "Lambda function updated successfully with image: $IMAGE_URI"
+        else
+          echo "Lambda function $LAMBDA_FUNCTION_NAME not found. Creating it now..."
+          # Create the Lambda function if it doesn't exist
+          aws lambda create-function \
+            --function-name $LAMBDA_FUNCTION_NAME \
+            --package-type Image \
+            --code ImageUri=$IMAGE_URI \
+            --role ${{ secrets.LAMBDA_EXECUTION_ROLE_ARN }} \
+            --timeout 30 \
+            --memory-size 512 \
+            --description "Split backend API Lambda function"
+          
+          echo "Lambda function created successfully with image: $IMAGE_URI"
+        fi
+
+    - name: Create ECR lifecycle policy
+      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+      run: |
+        # Create ECR lifecycle policy to keep only last 10 images
+        cat > lifecycle-policy.json << EOF
+        {
+          "rules": [
+            {
+              "rulePriority": 1,
+              "description": "Keep last 10 images",
+              "selection": {
+                "tagStatus": "tagged",
+                "countType": "imageCountMoreThan",
+                "countNumber": 10
+              },
+              "action": {
+                "type": "expire"
+              }
+            }
+          ]
+        }
+        EOF
+        
+        aws ecr put-lifecycle-policy \
+          --repository-name $ECR_REPOSITORY \
+          --lifecycle-policy-text file://lifecycle-policy.json
+
+    - name: Output deployment information
+      if: always()
+      run: |
+        echo "Deployment completed!"
+        echo "ECR Repository: ${{ env.ECR_REPOSITORY }}"
+        echo "Image Tag: ${{ github.sha }}"
+        echo "Image URI: ${{ steps.build-image.outputs.image }}"
