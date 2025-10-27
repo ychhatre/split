@@ -1,4 +1,15 @@
 import os
+from typing import Optional
+
+
+# Database Configuration
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://split_user:split_pass@localhost:5432/split_db")
+
+# OpenAI Configuration
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+# Frontend Configuration
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
 
 class MinIOConfig:

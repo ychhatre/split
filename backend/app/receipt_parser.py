@@ -6,6 +6,7 @@ import logging
 from typing import List, Dict, Any
 from pydantic import BaseModel, Field
 from typing import Optional
+from app.config import OPENAI_API_KEY 
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -33,7 +34,7 @@ class ReceiptData(BaseModel):
 
 class ReceiptParser:
     def __init__(self):
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        self.client = OpenAI(api_key=OPENAI_API_KEY)
     
     async def parse_receipt_image(self, image_base64: str) -> ReceiptData:
         """
@@ -70,7 +71,7 @@ Return ONLY valid JSON in this exact format (no markdown, no code blocks):
             logger.info(f"Image base64 length: {len(image_base64)} characters")
             
             response = self.client.chat.completions.create(
-                model="gpt-4o-mini",  # Using gpt-4o-mini for cost efficiency
+                model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": [
