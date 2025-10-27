@@ -1,6 +1,6 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from app.receipt_parser import ReceiptParser
-from app.minio_client import minio_client
+from app.storage_client import s3_client
 import base64
 import logging
 import uuid
@@ -34,20 +34,20 @@ async def upload_receipt(file: UploadFile = File(...)):
         image_content = await file.read()
         logger.info(f"File size: {len(image_content)} bytes")
         
-        # Upload to MinIO
-        logger.info("Uploading image to MinIO...")
+        # Upload to S3
+        logger.info("Uploading image to S3...")
         file_extension = file.filename.split('.')[-1] if '.' in file.filename else 'jpg'
         object_name = f"{session_id}/receipt.{file_extension}"
         
         try:
-            minio_url = minio_client.upload_file(
+            s3_url = s3_client.upload_file(
                 object_name=object_name,
                 file_data=image_content,
                 content_type=file.content_type
             )
-            logger.info(f"MinIO URL: {minio_url}")
+            logger.info(f"S3 URL: {s3_url}")
         except Exception as e:
-            logger.error(f"MinIO error: {e}")
+            logger.error(f"S3 error: {e}")
             raise HTTPException(status_code=500, detail=f"Failed to store image: {e}")
         
         # Convert to base64 for OpenAI
@@ -63,7 +63,7 @@ async def upload_receipt(file: UploadFile = File(...)):
         
         # Convert Pydantic model to dict for JSON response
         response_data = receipt_data.model_dump()
-        response_data["image_url"] = minio_url  # Include MinIO URL in response
+        response_data["image_url"] = s3_url  # Include S3 URL in response
         response_data["session_id"] = session_id  # Include session ID for session creation
         
         return response_data

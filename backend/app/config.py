@@ -12,26 +12,35 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
 
-class MinIOConfig:
-    """MinIO configuration settings"""
+class S3Config:
+    """S3 configuration settings"""
     
     def __init__(self):
-        self.endpoint = os.getenv("MINIO_ENDPOINT", "localhost:9000")
-        self.access_key = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
-        self.secret_key = os.getenv("MINIO_SECRET_KEY", "minioadmin")
-        self.secure = os.getenv("MINIO_SECURE", "false").lower() == "true"
-        self.bucket = os.getenv("MINIO_BUCKET", "receipts")
+        # S3 settings
+        self.region = os.getenv("AWS_REGION", "us-east-1")
+        self.access_key = os.getenv("AWS_ACCESS_KEY_ID")
+        self.secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
+        
+        # Determine environment and set appropriate bucket
+        self.environment = os.getenv("ENVIRONMENT", "development")
+        if self.environment == "production":
+            self.bucket = os.getenv("S3_BUCKET", "split-receipts-prod")
+        else:
+            self.bucket = os.getenv("S3_BUCKET", "split-receipts-dev")
     
     @property
     def base_url(self) -> str:
-        """Get the base URL for MinIO"""
-        protocol = "https" if self.secure else "http"
-        return f"{protocol}://{self.endpoint}"
+        """Get the base URL for S3"""
+        return f"https://{self.bucket}.s3.{self.region}.amazonaws.com"
     
     def get_object_url(self, object_name: str) -> str:
-        """Get the full URL for an object in MinIO"""
-        return f"{self.base_url}/{self.bucket}/{object_name}"
+        """Get the full URL for an object in S3"""
+        return f"https://{self.bucket}.s3.{self.region}.amazonaws.com/{object_name}"
+    
+    def is_production(self) -> bool:
+        """Check if we're running in production mode"""
+        return self.environment == "production"
 
 
 # Global config instance
-minio_config = MinIOConfig()
+s3_config = S3Config()
