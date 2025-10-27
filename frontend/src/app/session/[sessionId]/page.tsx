@@ -13,7 +13,6 @@ export default function GuestSession() {
   const [userName, setUserName] = useState('');
   const [userId, setUserId] = useState<number | null>(null);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
-  const [itemSplits, setItemSplits] = useState<Record<string, number>>({}); // item_id -> split_count
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [joined, setJoined] = useState(false);
@@ -75,14 +74,8 @@ export default function GuestSession() {
     setError('');
 
     try {
-      // Convert selectedItems to item_splits format
-      const item_splits = selectedItems.map(itemId => ({
-        item_id: itemId,
-        split_count: itemSplits[itemId] || 1, // Default to 1 if not set
-      }));
-
       const userData = await sessionAPI.selectItems(sessionId, userId, {
-        item_splits: item_splits,
+        item_ids: selectedItems,
       });
       setUser(userData);
       // Refresh session to update claimed_items
@@ -252,35 +245,6 @@ export default function GuestSession() {
                           </div>
                         </div>
                       </div>
-                      {selectedItems.includes(item.id) && !isFullyClaimed && (
-                        <div className="mt-3 ml-8 flex items-center gap-2">
-                          <label className="text-sm text-gray-700">Split among:</label>
-                          <input
-                            key={`split-${item.id}`}
-                            id={`split-${item.id}`}
-                            type="number"
-                            min="1"
-                            max={session.number_of_guests || 10}
-                            step="1"
-                            value={itemSplits[item.id] ?? 1}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              if (val === '' || val === null || val === undefined) {
-                                return;
-                              }
-                              const count = Math.max(1, Math.min(parseInt(val) || 1, session.number_of_guests || 10));
-                              setItemSplits(prev => {
-                                const updated = { ...prev, [item.id]: count };
-                                return updated;
-                              });
-                            }}
-                            className="w-16 px-2 py-1 border border-gray-300 rounded text-gray-900 text-center"
-                          />
-                          <span className="text-sm text-gray-500">
-                            {itemSplits[item.id] === 1 ? 'person' : 'people'}
-                          </span>
-                        </div>
-                      )}
                     </div>
                   );
                 })}

@@ -56,13 +56,8 @@ class UserJoin(BaseModel):
     name: str
 
 
-class ItemSplit(BaseModel):
-    item_id: str
-    split_count: int = 1  # How many people this user is representing for this item
-
-
 class UserSelectItems(BaseModel):
-    item_splits: List[ItemSplit]  # List of items with split information
+    item_ids: List[str]
     payment_method: Optional[str] = None
     payment_handle: Optional[str] = None
     host_payment_handle: Optional[str] = None
