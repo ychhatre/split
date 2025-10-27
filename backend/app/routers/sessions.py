@@ -120,7 +120,7 @@ async def select_items(
 ):
     """
     Select items for a user and calculate their totals.
-    Supports splitting items across multiple users.
+    Simple approach: each user claims entire items (no splitting).
     """
     # Get session
     session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
@@ -132,91 +132,43 @@ async def select_items(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
-    # Initialize item_splits if None
-    if session.item_splits is None:
-        session.item_splits = {}
+    # Get currently claimed items
+    claimed_items = get_claimed_items_from_users(session_id, db)
     
-    # Track items and calculate totals
-    user_item_ids = []
-    user_subtotal = 0.0
+    # Check for already claimed items (excluding current user's items)
+    already_claimed = []
+    for item_id in selection.item_ids:
+        if item_id in claimed_items and claimed_items[item_id] != user_id:
+            # Find the item name for the error message
+            item_name = next((item.get("name", item_id) for item in session.receipt_items if item.get("id") == item_id), item_id)
+            already_claimed.append(item_name)
     
-    # Process each item split
-    for item_split in selection.item_splits:
-        item_id = item_split.item_id
-        split_count = item_split.split_count
-        
-        # Find the item details
-        item = next((item for item in session.receipt_items if item.get("id") == item_id), None)
-        if not item:
-            raise HTTPException(status_code=400, detail=f"Item {item_id} not found")
-        
-        # Calculate the user's share
-        item_price = item.get("price", 0) * item.get("quantity", 1)
-        user_share = item_price / split_count
-        
-        # Check if there's enough remaining amount for this item
-        item_splits = session.item_splits.get(item_id, []) if session.item_splits else []
-
-        # Calculate total amount already split (excluding current user's existing shares)
-        total_split = sum(
-            s.get("share", 0) for s in item_splits 
-            if s.get("user_id") != user_id
+    if already_claimed:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Items already claimed by others: {', '.join(already_claimed)}"
         )
-        remaining_amount = item_price - total_split
-        
-        # Validate that user's share doesn't exceed remaining amount
-        if user_share > remaining_amount:
-            raise HTTPException(
-                status_code=400, 
-                detail=f"Item '{item.get('name', item_id)}' has ${remaining_amount:.2f} remaining, but you're trying to claim ${user_share:.2f}"
-            )
-        
-        user_subtotal += user_share
-        user_item_ids.append(item_id)
-        
-        # Update item_splits tracking
-        if item_id not in session.item_splits:
-            session.item_splits[item_id] = []
-        
-        # Remove any existing entry for this user (in case they're updating)
-        session.item_splits[item_id] = [
-            s for s in session.item_splits[item_id] 
-            if s.get("user_id") != user_id
-        ]
-        
-        # Add the new split entry
-        session.item_splits[item_id].append({
-            "user_id": user_id,
-            "user_name": user.name,
-            "share": round(user_share, 2),
-            "split_count": split_count
-        })
     
-    # Calculate proportional tax and tip
-    if session.subtotal > 0:
-        tax_rate = session.tax_amount / session.subtotal
-        tip_rate = session.tip_amount / session.subtotal
-        user_tax = user_subtotal * tax_rate
-        user_tip = user_subtotal * tip_rate
-    else:
-        user_tax = 0.0
-        user_tip = 0.0
-    
-    user_total = user_subtotal + user_tax + user_tip
+    # Calculate user totals
+    totals = calculate_user_totals(
+        selected_item_ids=selection.item_ids,
+        all_items=session.receipt_items,
+        tax_amount=session.tax_amount,
+        tip_amount=session.tip_amount,
+        subtotal=session.subtotal
+    )
     
     # Update user
-    user.selected_items = user_item_ids
-    user.subtotal = round(user_subtotal, 2)
-    user.tax = round(user_tax, 2)
-    user.tip = round(user_tip, 2)
-    user.total = round(user_total, 2)
+    user.selected_items = selection.item_ids
+    user.subtotal = totals["subtotal"]
+    user.tax = totals["tax"]
+    user.tip = totals["tip"]
+    user.total = totals["total"]
     user.host_payment_handle = session.host_payment_handle
     user.payment_method = "venmo"
     
-    # Save changes
     db.commit()
     db.refresh(user)
-    db.refresh(session)
     
     return user
 

@@ -53,7 +53,7 @@ export interface SessionResponse {
   receipt_items: ReceiptItem[];
   item_splits?: Record<string, any>;
   claimed_items?: Record<string, any>;
-  number_of_guests?: number;
+  number_of_guests: number;
   tax_amount: number;
   tip_amount: number;
   subtotal: number;
@@ -67,13 +67,8 @@ export interface UserJoin {
   name: string;
 }
 
-export interface ItemSplit {
-  item_id: string;
-  split_count: number;
-}
-
 export interface UserSelectItems {
-  item_splits: ItemSplit[];
+  item_ids: string[];
   payment_method?: string;
   payment_handle?: string;
 }
