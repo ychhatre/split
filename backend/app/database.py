@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Default to SQLite for local development, Supabase for production
+# Default to SQLite for local development
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./split.db")
 
 # Remove check_same_thread for SQLite if using SQLite
