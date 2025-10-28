@@ -70,33 +70,6 @@ jobs:
         
         echo "Lambda function updated successfully with image: $IMAGE_URI"
 
-    - name: Create ECR lifecycle policy
-      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-      run: |
-        # Create ECR lifecycle policy to keep only last 10 images
-        cat > lifecycle-policy.json << EOF
-        {
-          "rules": [
-            {
-              "rulePriority": 1,
-              "description": "Keep last 10 images",
-              "selection": {
-                "tagStatus": "tagged",
-                "countType": "imageCountMoreThan",
-                "countNumber": 10
-              },
-              "action": {
-                "type": "expire"
-              }
-            }
-          ]
-        }
-        EOF
-        
-        aws ecr put-lifecycle-policy \
-          --repository-name $ECR_REPOSITORY \
-          --lifecycle-policy-text file://lifecycle-policy.json
-
     - name: Output deployment information
       if: always()
       run: |
