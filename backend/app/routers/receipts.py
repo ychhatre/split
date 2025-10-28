@@ -2,10 +2,7 @@ from fastapi import APIRouter, UploadFile, File, HTTPException
 from app.receipt_parser import ReceiptParser
 from app.storage_client import s3_client
 import base64
-import logging
 import uuid
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/receipt", tags=["receipts"])
 parser = ReceiptParser()
@@ -17,25 +14,25 @@ async def upload_receipt(file: UploadFile = File(...)):
     Upload a receipt image and parse it using OpenAI Vision API.
     Returns the parsed receipt data with a session ID for storing the image.
     """
-    logger.info(f"Received file upload request. Filename: {file.filename}, Content type: {file.content_type}")
+    print(f"Received file upload request. Filename: {file.filename}, Content type: {file.content_type}")
     
     # Generate session ID for this receipt
     session_id = str(uuid.uuid4())
-    logger.info(f"Generated session ID: {session_id}")
+    print(f"Generated session ID: {session_id}")
     
     # Check file type
     if not file.content_type or not file.content_type.startswith("image/"):
-        logger.error(f"Invalid file type: {file.content_type}")
+        print(f"Invalid file type: {file.content_type}")
         raise HTTPException(status_code=400, detail="File must be an image")
     
     try:
         # Read file content
-        logger.info("Reading file content...")
+        print("Reading file content...")
         image_content = await file.read()
-        logger.info(f"File size: {len(image_content)} bytes")
+        print(f"File size: {len(image_content)} bytes")
         
         # Upload to S3
-        logger.info("Uploading image to S3...")
+        print("Uploading image to S3...")
         file_extension = file.filename.split('.')[-1] if '.' in file.filename else 'jpg'
         object_name = f"{session_id}/receipt.{file_extension}"
         
@@ -45,21 +42,21 @@ async def upload_receipt(file: UploadFile = File(...)):
                 file_data=image_content,
                 content_type=file.content_type
             )
-            logger.info(f"S3 URL: {s3_url}")
+            print(f"S3 URL: {s3_url}")
         except Exception as e:
-            logger.error(f"S3 error: {e}")
+            print(f"S3 error: {e}")
             raise HTTPException(status_code=500, detail=f"Failed to store image: {e}")
         
         # Convert to base64 for OpenAI
-        logger.info("Converting to base64 for OpenAI...")
+        print("Converting to base64 for OpenAI...")
         image_base64 = base64.b64encode(image_content).decode('utf-8')
-        logger.info(f"Base64 length: {len(image_base64)} characters")
+        print(f"Base64 length: {len(image_base64)} characters")
         
         # Parse receipt
-        logger.info("Calling receipt parser...")
+        print("Calling receipt parser...")
         receipt_data = await parser.parse_receipt_image(image_base64)
         
-        logger.info("Receipt parsed successfully!")
+        print("Receipt parsed successfully!")
         
         # Convert Pydantic model to dict for JSON response
         response_data = receipt_data.model_dump()
@@ -69,8 +66,8 @@ async def upload_receipt(file: UploadFile = File(...)):
         return response_data
         
     except ValueError as e:
-        logger.error(f"ValueError during receipt processing: {e}")
+        print(f"ValueError during receipt processing: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
-        logger.error(f"Unexpected error processing receipt: {e}", exc_info=True)
+        print(f"Unexpected error processing receipt: {e}")
         raise HTTPException(status_code=500, detail=f"Error processing receipt: {str(e)}")
