@@ -19,6 +19,6 @@ def lambda_handler(event, context):
     AWS Lambda handler function.
     This function is the entry point for Lambda invocations.
     """
-    logger.info(f"Lambda handler called with event: {event}")
-    logger.info(f"Context: {context.function_name}")
+    printj(f"Lambda handler called with event: {event}")
+    print(f"Context: {context.function_name}")
     return handler(event, context)
