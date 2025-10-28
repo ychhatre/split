@@ -59,31 +59,15 @@ jobs:
         LAMBDA_FUNCTION_NAME="${{ secrets.LAMBDA_FUNCTION_NAME || 'split-backend-lambda' }}"
         IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
         
-        # Check if Lambda function exists
-        if aws lambda get-function --function-name $LAMBDA_FUNCTION_NAME >/dev/null 2>&1; then
-          echo "Updating Lambda function: $LAMBDA_FUNCTION_NAME"
-          aws lambda update-function-code \
-            --function-name $LAMBDA_FUNCTION_NAME \
-            --image-uri $IMAGE_URI
-          
-          # Wait for the update to complete
-          aws lambda wait function-updated --function-name $LAMBDA_FUNCTION_NAME
-          
-          echo "Lambda function updated successfully with image: $IMAGE_URI"
-        else
-          echo "Lambda function $LAMBDA_FUNCTION_NAME not found. Creating it now..."
-          # Create the Lambda function if it doesn't exist
-          aws lambda create-function \
-            --function-name $LAMBDA_FUNCTION_NAME \
-            --package-type Image \
-            --code ImageUri=$IMAGE_URI \
-            --role ${{ secrets.LAMBDA_EXECUTION_ROLE_ARN }} \
-            --timeout 30 \
-            --memory-size 512 \
-            --description "Split backend API Lambda function"
-          
-          echo "Lambda function created successfully with image: $IMAGE_URI"
-        fi
+        echo "Updating Lambda function: $LAMBDA_FUNCTION_NAME"
+        aws lambda update-function-code \
+          --function-name $LAMBDA_FUNCTION_NAME \
+          --image-uri $IMAGE_URI
+        
+        # Wait for the update to complete
+        aws lambda wait function-updated --function-name $LAMBDA_FUNCTION_NAME
+        
+        echo "Lambda function updated successfully with image: $IMAGE_URI"
 
     - name: Create ECR lifecycle policy
       if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
