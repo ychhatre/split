@@ -38,8 +38,10 @@ class S3Client:
             )
             
             # Create S3 client
-            if self.config.access_key and self.config.secret_key:
-                # Use explicit credentials
+            # Only use explicit credentials if they are non-empty strings
+            if self.config.access_key and self.config.secret_key and \
+               isinstance(self.config.access_key, str) and len(self.config.access_key.strip()) > 0:
+                # Use explicit credentials (for local development)
                 print("[S3] Using explicit credentials")
                 s3_client = boto3.client(
                     's3',
@@ -49,7 +51,7 @@ class S3Client:
                     config=config
                 )
             else:
-                # Use IAM role or environment credentials
+                # Use IAM role or environment credentials (for Lambda)
                 print("[S3] Using IAM role or environment credentials")
                 s3_client = boto3.client('s3', region_name=self.config.region, config=config)
             
