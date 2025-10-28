@@ -12,6 +12,8 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 # Frontend Configuration
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
+PROD_BUCKET = "split-receipts-prod"
+DEV_BUCKET = "split-receipts-dev"
 
 class S3Config:
     """S3 configuration settings"""
@@ -25,9 +27,9 @@ class S3Config:
         # Determine environment and set appropriate bucket
         self.environment = os.getenv("ENVIRONMENT", "development")
         if self.environment == "production":
-            self.bucket = os.getenv("S3_BUCKET", "split-receipts-prod")
+            self.bucket = PROD_BUCKET
         else:
-            self.bucket = os.getenv("S3_BUCKET", "split-receipts-dev")
+            self.bucket = DEV_BUCKET
     
     @property
     def base_url(self) -> str:

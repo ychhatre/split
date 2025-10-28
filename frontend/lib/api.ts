@@ -102,11 +102,7 @@ export const receiptAPI = {
   upload: async (file: File): Promise<ReceiptData> => {
     const formData = new FormData();
     formData.append('file', file);
-    const response = await api.post('/api/receipt/upload', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+    const response = await api.post('/api/receipt/upload', formData);
     return response.data;
   },
 };
@@ -145,7 +141,7 @@ export const sessionAPI = {
   getStatus: async (sessionId: string) => {
     const response = await api.get(`/api/session/${sessionId}/status`);
     return response.data;
-  },
+  }
 };
 
 export default api;
