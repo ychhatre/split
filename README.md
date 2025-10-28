@@ -114,11 +114,10 @@ NEXT_PUBLIC_API_URL=http://localhost:8000  # Your backend URL
    - Click "New" → "Web Service"
    - Connect your GitHub repository
    - Configure:
-     - Runtime: Python 3
+     - Runtime: Docker
      - Branch: main
      - Root Directory: backend
-     - Build Command: `pip install -r requirements.txt`
-     - Start Command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+     - Dockerfile Path: ./Dockerfile
      - Enable "Auto deploy on push to main"
 
 3. **Set Environment Variables in Render**
