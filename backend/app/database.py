@@ -24,7 +24,7 @@ if is_local:
 else:
     # Production (Supabase) - optimized settings
     engine = create_engine(
-        DATABASE_URL,
+        DATABASE_URL + "?sslmode=require",
         pool_pre_ping=True,
         pool_recycle=300,
         pool_size=5,
