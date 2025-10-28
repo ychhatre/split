@@ -2,15 +2,14 @@ name: Deploy Backend to ECR and Update Lambda
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main ]
     paths:
       - 'backend/**'
-      - '.github/**'
+      - .github/**
   pull_request:
-    branches: [ main, master ]
+    branches: [ main ]
     paths:
       - 'backend/**'
-      - '.github/**'
 
 env:
   AWS_REGION: us-east-1
