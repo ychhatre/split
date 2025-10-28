@@ -1,13 +1,8 @@
 name: Run Database Migrations
 
 on:
-  # Manual trigger with database URL input
+  # Manual trigger
   workflow_dispatch:
-    inputs:
-      database_url:
-        description: 'Database URL (postgresql://...)'
-        required: true
-        type: string
   
   # Auto-trigger on migration file changes
   push:
@@ -38,8 +33,7 @@ jobs:
       - name: Run migrations
         working-directory: backend
         env:
-          # Use manual input if provided, otherwise use secret
-          DATABASE_URL: ${{ inputs.database_url || secrets.DATABASE_URL }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
           echo "Running migrations on production database..."
           echo "Database host: $(echo $DATABASE_URL | sed 's/.*@\([^:]*\).*/\1/')"
@@ -49,7 +43,7 @@ jobs:
       - name: Verify migration
         working-directory: backend
         env:
-          DATABASE_URL: ${{ inputs.database_url || secrets.DATABASE_URL }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
           echo "Current migration version:"
           alembic current
