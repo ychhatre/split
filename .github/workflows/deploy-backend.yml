@@ -12,7 +12,7 @@ on:
       - 'backend/**'
 
 env:
-  AWS_REGION: us-east-1
+  AWS_REGION: us-west-1
   ECR_REPOSITORY: split-backend
 
 jobs:
@@ -57,7 +57,7 @@ jobs:
         IMAGE_TAG: ${{ github.sha }}
       run: |
         # Update Lambda function to use the new image
-        LAMBDA_FUNCTION_NAME="${{ secrets.LAMBDA_FUNCTION_NAME || 'split-backend-lambda' }}"
+        LAMBDA_FUNCTION_NAME="${{ secrets.LAMBDA_FUNCTION_NAME}}"
         IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
         
         echo "Updating Lambda function: $LAMBDA_FUNCTION_NAME"
