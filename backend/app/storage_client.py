@@ -37,23 +37,15 @@ class S3Client:
                 retries={'max_attempts': 1}  # Retry once (total 2 attempts)
             )
             
-            # Create S3 client
-            # Only use explicit credentials if they are non-empty strings
-            if self.config.access_key and self.config.secret_key and \
-               isinstance(self.config.access_key, str) and len(self.config.access_key.strip()) > 0:
-                # Use explicit credentials (for local development)
-                print("[S3] Using explicit credentials")
-                s3_client = boto3.client(
-                    's3',
-                    region_name=self.config.region,
-                    aws_access_key_id=self.config.access_key,
-                    aws_secret_access_key=self.config.secret_key,
-                    config=config
-                )
-            else:
-                # Use IAM role or environment credentials (for Lambda)
-                print("[S3] Using IAM role or environment credentials")
-                s3_client = boto3.client('s3', region_name=self.config.region, config=config)
+            # Create S3 client - always use explicit credentials if set
+            print("[S3] Using explicit credentials from environment variables")
+            s3_client = boto3.client(
+                's3',
+                region_name=self.config.region,
+                aws_access_key_id=self.config.access_key,
+                aws_secret_access_key=self.config.secret_key,
+                config=config
+            )
             
             print("[S3] boto3 client object created")
             return s3_client
