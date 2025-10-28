@@ -102,9 +102,10 @@ export const receiptAPI = {
   upload: async (file: File): Promise<ReceiptData> => {
     const formData = new FormData();
     formData.append('file', file);
+    // Don't set Content-Type manually - let axios set it with the boundary parameter
     const response = await api.post('/api/receipt/upload', formData, {
       headers: {
-        'Content-Type': 'multipart/form-data',
+        'Content-Type': undefined, // Remove the default JSON content type
       },
     });
     return response.data;
