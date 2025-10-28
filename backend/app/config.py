@@ -20,7 +20,7 @@ class S3Config:
     
     def __init__(self):
         # S3 settings
-        self.region = os.getenv("AWS_REGION", "us-east-1")
+        self.region = os.getenv("AWS_REGION", "us-west-1")
         # Use custom env var names for Lambda (AWS_ACCESS_KEY_ID is reserved)
         self.access_key = os.getenv("S3_ACCESS_KEY_ID") or os.getenv("AWS_ACCESS_KEY_ID")
         self.secret_key = os.getenv("S3_SECRET_ACCESS_KEY") or os.getenv("AWS_SECRET_ACCESS_KEY")
