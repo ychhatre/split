@@ -11,7 +11,7 @@ on:
       - 'backend/**'
 
 env:
-  AWS_REGION: us-east-1
+  AWS_REGION: us-west-1
   ECR_REPOSITORY: split-backend
 
 jobs:
@@ -55,8 +55,8 @@ jobs:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         IMAGE_TAG: ${{ github.sha }}
       run: |
-        # Update Lambda function to use the new image
-        LAMBDA_FUNCTION_NAME="${{ secrets.LAMBDA_FUNCTION_NAME || 'split-backend-lambda' }}"
+        # Update Lambda function to use the new image, lambda function name is split-backened oop (apparantly gha doesn't support || fallback)
+        LAMBDA_FUNCTION_NAME="${{ secrets.LAMBDA_FUNCTION_NAME}}"
         IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
         
         # Check if Lambda function exists
