@@ -1,6 +1,9 @@
 import os
 import sys
 from mangum import Mangum
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Add the app directory to the Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'app'))
@@ -16,4 +19,6 @@ def lambda_handler(event, context):
     AWS Lambda handler function.
     This function is the entry point for Lambda invocations.
     """
+    logger.info(f"Lambda handler called with event: {event}")
+    logger.info(f"Context: {context.function_name}")
     return handler(event, context)
