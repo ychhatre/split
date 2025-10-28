@@ -57,3 +57,21 @@ async def root():
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
+
+@app.get("/debug")
+async def debug_info():
+    """Debug endpoint to check configuration"""
+    import os
+    return {
+        "status": "debug",
+        "environment": {
+            "OPENAI_API_KEY": "SET" if os.getenv("OPENAI_API_KEY") else "MISSING",
+            "AWS_REGION": os.getenv("AWS_REGION", "NOT_SET"),
+            "S3_BUCKET": os.getenv("S3_BUCKET", "NOT_SET"),
+            "ENVIRONMENT": os.getenv("ENVIRONMENT", "NOT_SET"),
+        },
+        "aws_credentials": {
+            "AWS_ACCESS_KEY_ID": "SET" if os.getenv("AWS_ACCESS_KEY_ID") else "MISSING",
+            "AWS_SECRET_ACCESS_KEY": "SET" if os.getenv("AWS_SECRET_ACCESS_KEY") else "MISSING",
+        }
+    }
