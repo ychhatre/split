@@ -1,6 +1,7 @@
 import os
-from typing import Optional
+from dotenv import load_dotenv
 
+load_dotenv()
 
 # Database Configuration
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://split_user:split_pass@localhost:5432/split_db")
