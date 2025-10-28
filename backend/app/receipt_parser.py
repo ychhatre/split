@@ -69,6 +69,7 @@ class ReceiptItem(BaseModel):
 
 
 class ReceiptData(BaseModel):
+    is_receipt: bool = True  # Whether the image is actually a receipt
     items: List[ReceiptItem] = Field(default_factory=list)
     subtotal: float = 0.0
     tax: float = 0.0
@@ -94,16 +95,22 @@ class ReceiptParser:
         
         # Construct the system and user prompts
         system_prompt = """You are an expert at parsing restaurant receipts. 
-Extract the following information from the receipt image and return it as valid JSON:
 
-1. items: array of objects with 'id' (unique identifier), 'name' (item name), 'price' (item price), and 'quantity' (default 1)
-2. subtotal: total before tax and tip
-3. tax: tax amount
-4. tip: tip amount (if present)
-5. total: final total amount
+FIRST, validate if the image is actually a receipt (restaurant, store, or any purchase receipt).
+If it is NOT a receipt (e.g., random image, document, screenshot, etc.), set "is_receipt" to false.
+
+If it IS a receipt, extract the following information and return it as valid JSON:
+
+1. is_receipt: boolean indicating if this is actually a receipt (true/false)
+2. items: array of objects with 'id' (unique identifier), 'name' (item name), 'price' (item price), and 'quantity' (default 1)
+3. subtotal: total before tax and tip
+4. tax: tax amount
+5. tip: tip amount (if present, otherwise 0)
+6. total: final total amount
 
 Return ONLY valid JSON in this exact format (no markdown, no code blocks):
 {
+  "is_receipt": true,
   "items": [
     {"id": "item1", "name": "Item Name", "price": 12.99, "quantity": 1}
   ],
@@ -111,6 +118,16 @@ Return ONLY valid JSON in this exact format (no markdown, no code blocks):
   "tax": 4.50,
   "tip": 10.00,
   "total": 64.50
+}
+
+If the image is NOT a receipt, return:
+{
+  "is_receipt": false,
+  "items": [],
+  "subtotal": 0.0,
+  "tax": 0.0,
+  "tip": 0.0,
+  "total": 0.0
 }"""
 
         user_prompt = "Please extract the receipt information as specified."
@@ -157,6 +174,12 @@ Return ONLY valid JSON in this exact format (no markdown, no code blocks):
             
             logger.info("Validating with Pydantic...")
             receipt_data = ReceiptData(**raw_data)
+            
+            # Check if the image is actually a receipt
+            if not receipt_data.is_receipt:
+                logger.warning("Image is not a valid receipt")
+                raise ValueError("The uploaded image does not appear to be a receipt. Please upload a valid receipt image.")
+            
             logger.info(f"Validation successful. Items count: {len(receipt_data.items)}")
             logger.info(f"Totals - Subtotal: {receipt_data.subtotal}, Tax: {receipt_data.tax}, Tip: {receipt_data.tip}, Total: {receipt_data.total}")
             
