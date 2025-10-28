@@ -55,7 +55,7 @@ jobs:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         IMAGE_TAG: ${{ github.sha }}
       run: |
-        # Update Lambda function to use the new image, lambda function name is split-backened oop (apparantly gha doesn't support || fallback)
+        # Update Lambda function to use the new image
         LAMBDA_FUNCTION_NAME="${{ secrets.LAMBDA_FUNCTION_NAME}}"
         IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
         
