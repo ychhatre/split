@@ -24,10 +24,18 @@ class S3Client:
         """Create S3 client"""
         try:
             import boto3
+            from botocore.config import Config
             
             print(f"[S3] Region: {self.config.region}")
             print(f"[S3] Access Key present: {bool(self.config.access_key)}")
             print(f"[S3] Secret Key present: {bool(self.config.secret_key)}")
+            
+            # Configure with timeouts to prevent hanging
+            config = Config(
+                connect_timeout=3,  # 3 seconds to establish connection
+                read_timeout=5,      # 5 seconds to read response
+                retries={'max_attempts': 1}  # Retry once (total 2 attempts)
+            )
             
             # Create S3 client
             if self.config.access_key and self.config.secret_key:
@@ -37,12 +45,13 @@ class S3Client:
                     's3',
                     region_name=self.config.region,
                     aws_access_key_id=self.config.access_key,
-                    aws_secret_access_key=self.config.secret_key
+                    aws_secret_access_key=self.config.secret_key,
+                    config=config
                 )
             else:
                 # Use IAM role or environment credentials
                 print("[S3] Using IAM role or environment credentials")
-                s3_client = boto3.client('s3', region_name=self.config.region)
+                s3_client = boto3.client('s3', region_name=self.config.region, config=config)
             
             print("[S3] boto3 client object created")
             return s3_client
@@ -60,12 +69,29 @@ class S3Client:
         print(f"[S3] ensure_bucket_exists called for: {bucket}")
         
         try:
-            from botocore.exceptions import ClientError
+            from botocore.exceptions import ClientError, EndpointConnectionError, ReadTimeoutError, ConnectTimeoutError
+            import time
             
             print(f"[S3] Calling head_bucket...")
-            self.client.head_bucket(Bucket=bucket)
-            print(f"[S3] Bucket exists: {bucket}")
-            logger.info(f"S3 bucket exists: {bucket}")
+            start_time = time.time()
+            try:
+                self.client.head_bucket(Bucket=bucket)
+                elapsed = time.time() - start_time
+                print(f"[S3] head_bucket completed in {elapsed:.2f}s")
+                print(f"[S3] Bucket exists: {bucket}")
+                logger.info(f"S3 bucket exists: {bucket}")
+            except Exception as api_error:
+                elapsed = time.time() - start_time
+                print(f"[S3] head_bucket failed after {elapsed:.2f}s: {type(api_error).__name__}: {api_error}")
+                raise
+        except (ConnectTimeoutError, ReadTimeoutError) as e:
+            print(f"[S3] Timeout error: {e}")
+            logger.error(f"S3 timeout error: {e}")
+            raise Exception(f"AWS S3 connection timeout. Check your network and AWS credentials.")
+        except EndpointConnectionError as e:
+            print(f"[S3] Connection error: {e}")
+            logger.error(f"S3 connection error: {e}")
+            raise Exception(f"Cannot connect to AWS S3. Check your network connection.")
         except ClientError as e:
             print(f"[S3] ClientError in head_bucket: {e}")
             error_code = e.response['Error']['Code']
@@ -92,6 +118,10 @@ class S3Client:
                 print(f"[S3] Error code {error_code}: {e}")
                 logger.error(f"Error checking S3 bucket: {e}")
                 raise
+        except Exception as e:
+            print(f"[S3] Unexpected error in ensure_bucket_exists: {type(e).__name__}: {e}")
+            logger.error(f"S3 unexpected error: {e}")
+            raise
     
     def upload_file(
         self,
@@ -116,12 +146,7 @@ class S3Client:
         bucket = bucket_name or self.config.bucket
         print(f"[S3] Using bucket: {bucket}")
         
-        # Ensure bucket exists
-        print(f"[S3] Checking if bucket exists...")
-        self.ensure_bucket_exists(bucket)
-        print(f"[S3] Bucket check completed")
-        
-        # Upload file
+        # Upload file (assuming bucket exists)
         try:
             from botocore.exceptions import ClientError
             
@@ -137,7 +162,6 @@ class S3Client:
             logger.info(f"Uploaded to S3: {object_name}")
         except ClientError as e:
             print(f"[S3] ClientError: {e}")
-            logger.error(f"S3 upload error: {e}")
             raise
         
         # Return the full URL
