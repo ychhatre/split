@@ -67,7 +67,6 @@ async def debug_info():
         "environment": {
             "OPENAI_API_KEY": "SET" if os.getenv("OPENAI_API_KEY") else "MISSING",
             "AWS_REGION": os.getenv("AWS_REGION", "NOT_SET"),
-            "S3_BUCKET": os.getenv("S3_BUCKET", "NOT_SET"),
             "ENVIRONMENT": os.getenv("ENVIRONMENT", "NOT_SET"),
         },
         "aws_credentials": {
