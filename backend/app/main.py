@@ -1,5 +1,4 @@
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine, Base
 from app.routers import receipts, sessions
 import logging
@@ -31,19 +30,10 @@ async def startup_event():
     else:
         logging.warning("Database tables could not be created - will be created on first use")
 
-# Configure CORS - Allow all origins for development
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins for development
-    allow_credentials=False,  # Must be False when using wildcard origins
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # Include routers
 app.include_router(receipts.router)
 app.include_router(sessions.router)
-
 
 @app.get("/")
 async def root():
