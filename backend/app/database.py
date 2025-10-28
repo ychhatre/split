@@ -6,21 +6,36 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Create engine optimized for Supabase PostgreSQL
-engine = create_engine(
-    DATABASE_URL,
-    pool_pre_ping=True,      # Verify connections before use
-    pool_recycle=300,        # Recycle connections every 5 minutes
-    pool_size=5,             # Number of connections to maintain
-    max_overflow=10,         # Additional connections when needed
-    echo=False,              # Set to True for SQL debugging
-    connect_args={
-        "connect_timeout": 10,
-        "options": "-c timezone=utc"
-    }
-)
 
-logger.info("Using PostgreSQL database (Supabase)")
+# Determine if local or production based on URL
+is_local = "localhost" in DATABASE_URL or "127.0.0.1" in DATABASE_URL
+
+# Create engine with appropriate settings
+if is_local:
+    # Local development - simpler settings
+    engine = create_engine(
+        DATABASE_URL,
+        pool_pre_ping=True,
+        pool_size=5,
+        max_overflow=10,
+        echo=False  # Set to True for SQL debugging
+    )
+    logger.info("✓ Using LOCAL PostgreSQL database")
+else:
+    # Production (Supabase) - optimized settings
+    engine = create_engine(
+        DATABASE_URL,
+        pool_pre_ping=True,
+        pool_recycle=300,
+        pool_size=5,
+        max_overflow=10,
+        echo=False,
+        connect_args={
+            "connect_timeout": 10,
+            "options": "-c timezone=utc"
+        }
+    )
+    logger.info("✓ Using PRODUCTION PostgreSQL database (Supabase)")
 
 SQLALCHEMY_DATABASE_URL = DATABASE_URL
 

@@ -15,28 +15,29 @@ A receipt scanning and bill splitting application that allows groups to split re
 
 - **Backend**: FastAPI (Python) - Hosted on Render
 - **Frontend**: Next.js 14 with TypeScript - Deploy on Vercel
-- **Database**: Supabase PostgreSQL (for both local and production)
+- **Database**: PostgreSQL (Local: Docker Compose, Production: Supabase)
 - **Storage**: AWS S3 for receipt images
 - **AI**: OpenAI GPT-4 Vision for receipt parsing
+- **CI/CD**: GitHub Actions for automated migrations
 
 ## Local Development
 
 ### Backend Setup
 
-1. **Set up Supabase Database**
-   - Create a free account at [Supabase](https://supabase.com)
-   - Create a new project
-   - Go to Settings → Database and copy your connection string
-   - Update the connection string to use direct connection (not pooler) for local development
+1. **Start Local PostgreSQL Database**
+```bash
+cd backend
+docker-compose up -d
+```
 
 2. **Install and Run Backend**
 ```bash
-cd backend
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
-# Create .env file with your Supabase connection string (see below)
+# Create .env file (copy from env.example)
+cp env.example .env
 
 # Run database migrations to create tables
 alembic upgrade head
@@ -68,9 +69,8 @@ The frontend will be available at `http://localhost:3000`
 Create a `.env` file in the `backend/` directory:
 
 ```bash
-# Database - Supabase PostgreSQL Connection String
-# Get this from Supabase: Settings → Database → Connection String (Direct)
-DATABASE_URL=postgresql://postgres.[project-ref]:[password]@aws-0-us-west-1.pooler.supabase.com:5432/postgres
+# Database - Local PostgreSQL (via Docker Compose)
+DATABASE_URL=postgresql://split_user:split_pass@localhost:5432/split_db
 
 # OpenAI API Key for receipt parsing
 OPENAI_API_KEY=sk-...
@@ -81,11 +81,11 @@ AWS_SECRET_ACCESS_KEY=your_secret_key
 AWS_REGION=us-west-1
 
 # Application Settings
-ENVIRONMENT=development  # or 'production'
+ENVIRONMENT=development
 FRONTEND_URL=http://localhost:3000
 ```
 
-**Note**: For local development, use the "Direct" connection string from Supabase, not the "Pooler" connection string.
+**Note**: For local development, use the Docker Compose PostgreSQL. For production (Render), use your Supabase connection string.
 
 ### Frontend (.env.local)
 
@@ -99,12 +99,17 @@ NEXT_PUBLIC_API_URL=http://localhost:8000  # Your backend URL
 
 ### Backend Deployment on Render
 
-1. **Use Your Supabase Database**
-   - Use the same Supabase project (or create a separate production project)
-   - Get the connection string from Settings → Database → Connection String
-   - For production, you can use either Direct or Pooler connection
+1. **Set Up Production Supabase Database**
+   - Create a Supabase project at [Supabase](https://supabase.com)
+   - Go to Settings → Database → Connection String
+   - Copy the connection string (use Transaction or Session pooler for production)
 
-2. **Deploy to Render**
+2. **Set Up GitHub Secrets for Auto-Migrations**
+   - Go to your GitHub repo → Settings → Secrets and variables → Actions
+   - Add secret: `DATABASE_URL` with your Supabase connection string
+   - New migrations will automatically run when pushed to `main`
+
+3. **Deploy to Render**
    - Go to [Render Dashboard](https://dashboard.render.com)
    - Click "New" → "Web Service"
    - Connect your GitHub repository
