@@ -1,9 +1,10 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException
-from app.receipt_parser import ReceiptParser
+from app.receipt_parser import ReceiptParser, compress_image_for_vision
 from app.storage_client import s3_client
 import base64
 import uuid
 import logging
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -34,30 +35,37 @@ async def upload_receipt(file: UploadFile = File(...)):
         image_content = await file.read()
         logger.info(f"File size: {len(image_content)} bytes")
         
-        # Upload to S3
-        logger.info("Uploading image to S3...")
+        # Prepare data for parallel operations
         file_extension = file.filename.split('.')[-1] if '.' in file.filename else 'jpg'
         object_name = f"{session_id}/receipt.{file_extension}"
         
-        try:
-            s3_url = s3_client.upload_file(
-                object_name=object_name,
-                file_data=image_content,
-                content_type=file.content_type
-            )
-            logger.info(f"✓ S3 upload successful: {s3_url}")
-        except Exception as e:
-            logger.error(f"S3 upload failed: {e}", exc_info=True)
-            raise HTTPException(status_code=500, detail=f"Failed to store image: {e}")
+        # Compress image for faster OpenAI processing (run in thread to not block)
+        logger.info("Compressing image for OpenAI...")
+        image_base64 = await asyncio.to_thread(compress_image_for_vision, image_content)
         
-        # Convert to base64 for OpenAI
-        logger.debug("Converting to base64 for OpenAI...")
-        image_base64 = base64.b64encode(image_content).decode('utf-8')
+        # Run S3 upload and OpenAI parsing in parallel for speed
+        logger.info("Starting parallel S3 upload and receipt parsing...")
         
-        # Parse receipt
-        logger.info("Parsing receipt with OpenAI Vision API...")
-        receipt_data = await parser.parse_receipt_image(image_base64)
+        async def upload_to_s3():
+            """Upload image to S3 in background"""
+            try:
+                return await asyncio.to_thread(
+                    s3_client.upload_file,
+                    object_name=object_name,
+                    file_data=image_content,
+                    content_type=file.content_type
+                )
+            except Exception as e:
+                logger.error(f"S3 upload failed: {e}", exc_info=True)
+                raise HTTPException(status_code=500, detail=f"Failed to store image: {e}")
         
+        # Run both operations concurrently
+        s3_url, receipt_data = await asyncio.gather(
+            upload_to_s3(),
+            parser.parse_receipt_image(image_base64)
+        )
+        
+        logger.info(f"✓ S3 upload successful: {s3_url}")
         logger.info(f"✓ Receipt parsed successfully - {len(receipt_data.items)} items found, total: ${receipt_data.total}")
         
         # Convert Pydantic model to dict for JSON response
