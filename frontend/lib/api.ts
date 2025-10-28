@@ -102,7 +102,11 @@ export const receiptAPI = {
   upload: async (file: File): Promise<ReceiptData> => {
     const formData = new FormData();
     formData.append('file', file);
-    const response = await api.post('/api/receipt/upload', formData);
+    const response = await api.post('/api/receipt/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
     return response.data;
   },
 };
