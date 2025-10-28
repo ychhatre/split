@@ -5,7 +5,7 @@ logger = logging.getLogger(__name__)
 
 
 class S3Client:
-    """S3 client for file operations"""
+    """S3 client for receipt file storage"""
     
     def __init__(self):
         self.config = s3_config
@@ -15,30 +15,28 @@ class S3Client:
     def client(self):
         """Lazy initialization of the S3 client"""
         if self._client is None:
-            print("[S3] Creating S3 client...")
+            logger.info("Initializing S3 client...")
             self._client = self._create_s3_client()
-            print("[S3] S3 client created successfully")
+            logger.info("✓ S3 client initialized")
         return self._client
     
     def _create_s3_client(self):
-        """Create S3 client"""
+        """Create and configure S3 client"""
         try:
             import boto3
             from botocore.config import Config
             
-            print(f"[S3] Region: {self.config.region}")
-            print(f"[S3] Access Key present: {bool(self.config.access_key)}")
-            print(f"[S3] Secret Key present: {bool(self.config.secret_key)}")
+            logger.debug(f"S3 Region: {self.config.region}")
+            logger.debug(f"S3 Bucket: {self.config.bucket}")
             
             # Configure with timeouts to prevent hanging
             config = Config(
-                connect_timeout=3,  # 3 seconds to establish connection
-                read_timeout=5,      # 5 seconds to read response
-                retries={'max_attempts': 1}  # Retry once (total 2 attempts)
+                connect_timeout=5,
+                read_timeout=10,
+                retries={'max_attempts': 2}
             )
             
-            # Create S3 client - always use explicit credentials if set
-            print("[S3] Using explicit credentials from environment variables")
+            # Create S3 client with explicit credentials
             s3_client = boto3.client(
                 's3',
                 region_name=self.config.region,
@@ -47,74 +45,53 @@ class S3Client:
                 config=config
             )
             
-            print("[S3] boto3 client object created")
             return s3_client
         except ImportError:
-            print("[S3] boto3 not installed!")
             logger.error("boto3 library not installed. Install with: pip install boto3")
             raise
         except Exception as e:
-            print(f"[S3] Error creating client: {e}")
+            logger.error(f"Failed to create S3 client: {e}")
             raise
     
     def ensure_bucket_exists(self, bucket_name: str = None):
-        """Ensure the bucket exists, create if it doesn't"""
+        """Ensure the S3 bucket exists, create if it doesn't"""
         bucket = bucket_name or self.config.bucket
-        print(f"[S3] ensure_bucket_exists called for: {bucket}")
+        logger.debug(f"Checking if bucket exists: {bucket}")
         
         try:
             from botocore.exceptions import ClientError, EndpointConnectionError, ReadTimeoutError, ConnectTimeoutError
-            import time
             
-            print(f"[S3] Calling head_bucket...")
-            start_time = time.time()
             try:
                 self.client.head_bucket(Bucket=bucket)
-                elapsed = time.time() - start_time
-                print(f"[S3] head_bucket completed in {elapsed:.2f}s")
-                print(f"[S3] Bucket exists: {bucket}")
-                logger.info(f"S3 bucket exists: {bucket}")
-            except Exception as api_error:
-                elapsed = time.time() - start_time
-                print(f"[S3] head_bucket failed after {elapsed:.2f}s: {type(api_error).__name__}: {api_error}")
-                raise
+                logger.info(f"✓ S3 bucket exists: {bucket}")
+            except ClientError as e:
+                error_code = e.response['Error']['Code']
+                if error_code == '404':
+                    # Bucket doesn't exist, create it
+                    logger.info(f"Creating S3 bucket: {bucket}")
+                    try:
+                        if self.config.region == 'us-east-1':
+                            self.client.create_bucket(Bucket=bucket)
+                        else:
+                            self.client.create_bucket(
+                                Bucket=bucket,
+                                CreateBucketConfiguration={'LocationConstraint': self.config.region}
+                            )
+                        logger.info(f"✓ Created S3 bucket: {bucket}")
+                    except ClientError as create_error:
+                        logger.error(f"Failed to create S3 bucket: {create_error}")
+                        raise
+                else:
+                    logger.error(f"S3 bucket check failed: {e}")
+                    raise
         except (ConnectTimeoutError, ReadTimeoutError) as e:
-            print(f"[S3] Timeout error: {e}")
-            logger.error(f"S3 timeout error: {e}")
+            logger.error(f"S3 connection timeout: {e}")
             raise Exception(f"AWS S3 connection timeout. Check your network and AWS credentials.")
         except EndpointConnectionError as e:
-            print(f"[S3] Connection error: {e}")
-            logger.error(f"S3 connection error: {e}")
+            logger.error(f"Cannot connect to AWS S3: {e}")
             raise Exception(f"Cannot connect to AWS S3. Check your network connection.")
-        except ClientError as e:
-            print(f"[S3] ClientError in head_bucket: {e}")
-            error_code = e.response['Error']['Code']
-            if error_code == '404':
-                # Bucket doesn't exist, create it
-                print(f"[S3] Bucket not found, creating...")
-                try:
-                    if self.config.region == 'us-east-1':
-                        # us-east-1 doesn't need LocationConstraint
-                        self.client.create_bucket(Bucket=bucket)
-                    else:
-                        # Other regions need LocationConstraint
-                        self.client.create_bucket(
-                            Bucket=bucket,
-                            CreateBucketConfiguration={'LocationConstraint': self.config.region}
-                        )
-                    print(f"[S3] Bucket created: {bucket}")
-                    logger.info(f"Created S3 bucket: {bucket}")
-                except ClientError as create_error:
-                    print(f"[S3] Failed to create bucket: {create_error}")
-                    logger.error(f"Failed to create S3 bucket: {create_error}")
-                    raise
-            else:
-                print(f"[S3] Error code {error_code}: {e}")
-                logger.error(f"Error checking S3 bucket: {e}")
-                raise
         except Exception as e:
-            print(f"[S3] Unexpected error in ensure_bucket_exists: {type(e).__name__}: {e}")
-            logger.error(f"S3 unexpected error: {e}")
+            logger.error(f"Unexpected error checking S3 bucket: {e}")
             raise
     
     def upload_file(
@@ -136,15 +113,12 @@ class S3Client:
         Returns:
             The full URL to the uploaded file
         """
-        print(f"[S3] Starting upload_file for {object_name}")
         bucket = bucket_name or self.config.bucket
-        print(f"[S3] Using bucket: {bucket}")
+        logger.info(f"Uploading file to S3: {object_name} ({len(file_data)} bytes)")
         
-        # Upload file (assuming bucket exists)
         try:
             from botocore.exceptions import ClientError
             
-            print(f"[S3] Starting put_object call...")
             self.client.put_object(
                 Bucket=bucket,
                 Key=object_name,
@@ -152,16 +126,13 @@ class S3Client:
                 ContentType=content_type
             )
             
-            print(f"[S3] Upload successful")
-            logger.info(f"Uploaded to S3: {object_name}")
+            url = self.config.get_object_url(object_name)
+            logger.info(f"✓ File uploaded successfully: {url}")
+            return url
+            
         except ClientError as e:
-            print(f"[S3] ClientError: {e}")
+            logger.error(f"S3 upload failed: {e}")
             raise
-        
-        # Return the full URL
-        url = self.config.get_object_url(object_name)
-        print(f"[S3] Generated URL: {url}")
-        return url
     
     def delete_file(self, object_name: str, bucket_name: str = None) -> bool:
         """
@@ -180,8 +151,7 @@ class S3Client:
             from botocore.exceptions import ClientError
             
             self.client.delete_object(Bucket=bucket, Key=object_name)
-            
-            logger.info(f"Deleted from S3: {object_name}")
+            logger.info(f"✓ Deleted from S3: {object_name}")
             return True
         except ClientError as e:
             logger.error(f"S3 delete error: {e}")
@@ -209,9 +179,10 @@ class S3Client:
                 Params={'Bucket': bucket, 'Key': object_name},
                 ExpiresIn=expires_in
             )
+            logger.debug(f"Generated presigned URL for: {object_name}")
             return url
         except ClientError as e:
-            logger.error(f"S3 presigned URL error: {e}")
+            logger.error(f"Failed to generate presigned URL: {e}")
             # Fallback to direct URL
             return self.config.get_object_url(object_name)
 
