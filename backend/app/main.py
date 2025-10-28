@@ -31,12 +31,16 @@ async def startup_event():
     else:
         logging.warning("Database tables could not be created - will be created on first use")
 
-# Configure CORS - Allow all origins for development
+# Configure CORS - Allow specific origins for production
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins for development
+    allow_origins=[
+        "https://split-eight-nu.vercel.app",  # Production frontend
+        "http://localhost:3000",  # Local development
+        "http://127.0.0.1:3000",  # Local development alternative
+    ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
