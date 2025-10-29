@@ -14,6 +14,7 @@ export default function Home() {
   const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [isDragOver, setIsDragOver] = useState(false);
   const router = useRouter();
 
   // Validate Venmo username format
@@ -62,6 +63,36 @@ export default function Home() {
     if (selectedFile) {
       setFile(selectedFile);
       setError('');
+    }
+  };
+
+  const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragOver(false);
+
+    const files = event.dataTransfer.files;
+    if (files && files.length > 0) {
+      const droppedFile = files[0];
+      // Check if it's an image file
+      if (droppedFile.type.startsWith('image/')) {
+        setFile(droppedFile);
+        setError('');
+      } else {
+        setError('Please upload an image file');
+      }
     }
   };
 
@@ -256,7 +287,16 @@ export default function Home() {
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Upload Receipt
                     </label>
-                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+                    <div 
+                      className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors duration-200 ${
+                        isDragOver 
+                          ? 'border-blue-400 bg-blue-50' 
+                          : 'border-gray-300 hover:border-gray-400'
+                      }`}
+                      onDragOver={handleDragOver}
+                      onDragLeave={handleDragLeave}
+                      onDrop={handleDrop}
+                    >
                       <input
                         type="file"
                         accept="image/*"
@@ -269,7 +309,9 @@ export default function Home() {
                         className="cursor-pointer flex flex-col items-center"
                       >
                         <svg
-                          className="w-12 h-12 text-gray-400 mb-4"
+                          className={`w-12 h-12 mb-4 transition-colors duration-200 ${
+                            isDragOver ? 'text-blue-500' : 'text-gray-400'
+                          }`}
                           fill="none"
                           stroke="currentColor"
                           viewBox="0 0 24 24"
@@ -281,9 +323,16 @@ export default function Home() {
                             d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
                           />
                         </svg>
-                        <span className="text-gray-600">
-                          {file ? file.name : 'Click to upload receipt'}
+                        <span className={`transition-colors duration-200 ${
+                          isDragOver ? 'text-blue-600' : 'text-gray-600'
+                        }`}>
+                          {file ? file.name : isDragOver ? 'Drop your receipt here' : 'Click to upload or drag & drop receipt'}
                         </span>
+                        {!file && (
+                          <span className="text-sm text-gray-500 mt-2">
+                            Supports JPG, PNG, GIF, and other image formats
+                          </span>
+                        )}
                       </label>
                     </div>
                   </div>
