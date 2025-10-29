@@ -8,11 +8,54 @@ export default function Home() {
   const [file, setFile] = useState<File | null>(null);
   const [hostName, setHostName] = useState('');
   const [hostPaymentHandle, setHostPaymentHandle] = useState('');
+  const [venmoValidationError, setVenmoValidationError] = useState('');
   const [numberOfGuests, setNumberOfGuests] = useState<number>(1);
+  const [guestInputValue, setGuestInputValue] = useState<string>('1');
   const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const router = useRouter();
+
+  // Validate Venmo username format
+  const validateVenmoUsername = (username: string): { isValid: boolean; error: string } => {
+    if (!username) {
+      return { isValid: true, error: '' }; // Empty is valid (optional field)
+    }
+
+    // Remove @ if present at the start
+    const cleanUsername = username.startsWith('@') ? username.slice(1) : username;
+
+    // Venmo username rules:
+    // - 5-30 characters
+    // - Letters, numbers, hyphens, underscores only
+    const venmoUsernameRegex = /^[a-zA-Z0-9_-]{5,30}$/;
+
+    if (cleanUsername.length < 5) {
+      return { isValid: false, error: 'Username must be at least 5 characters' };
+    }
+
+    if (cleanUsername.length > 30) {
+      return { isValid: false, error: 'Username must be 30 characters or less' };
+    }
+
+    if (!venmoUsernameRegex.test(cleanUsername)) {
+      return { isValid: false, error: 'Username can only contain letters, numbers, hyphens, and underscores' };
+    }
+
+    return { isValid: true, error: '' };
+  };
+
+  // Format Venmo username for display (add @ if not present)
+  const formatVenmoUsername = (username: string): string => {
+    if (!username) return '';
+    return username.startsWith('@') ? username : `@${username}`;
+  };
+
+  const handlePaymentHandleChange = (value: string) => {
+    setHostPaymentHandle(value);
+    const validation = validateVenmoUsername(value);
+    setVenmoValidationError(validation.error);
+  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -122,30 +165,92 @@ export default function Home() {
                       Number of Guests
                     </label>
                     <input
-                      type="number"
-                      min="1"
-                      value={numberOfGuests}
-                      onChange={(e) => setNumberOfGuests(Math.max(1, parseInt(e.target.value) || 1))}
-                      placeholder="How many people are splitting the bill?"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={guestInputValue}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        // Allow empty string while typing
+                        if (value === '') {
+                          setGuestInputValue('');
+                          return;
+                        }
+                        // Only allow digits
+                        if (/^\d+$/.test(value)) {
+                          const num = parseInt(value, 10);
+                          if (num >= 1 && num <= 99) {
+                            setGuestInputValue(value);
+                            setNumberOfGuests(num);
+                          }
+                        }
+                      }}
+                      onBlur={(e) => {
+                        // Ensure valid value on blur
+                        const value = e.target.value;
+                        if (value === '' || parseInt(value, 10) < 1) {
+                          setNumberOfGuests(1);
+                          setGuestInputValue('1');
+                        }
+                      }}
+                      placeholder="Enter number of guests"
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-900"
                     />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Enter a number between 1 and 99
+                    </p>
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Payment Handle (Optional)
+                      Venmo Username (Optional)
                     </label>
                     <input
                       type="text"
                       value={hostPaymentHandle}
-                      onChange={(e) => setHostPaymentHandle(e.target.value)}
-                      placeholder="e.g., @yourvenmo or your PayPal email"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-900"
+                      onChange={(e) => handlePaymentHandleChange(e.target.value)}
+                      placeholder="e.g., @yourvenmo or yourvenmo"
+                      className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:border-transparent text-gray-900 ${
+                        venmoValidationError 
+                          ? 'border-red-500 focus:ring-red-500' 
+                          : 'border-gray-300 focus:ring-indigo-500'
+                      }`}
                     />
-                    <p className="text-xs text-gray-500 mt-1">
-                      This is where people will send their payments
-          </p>
-        </div>
+                    {venmoValidationError ? (
+                      <p className="text-xs text-red-600 mt-1 font-semibold">
+                        ⚠ {venmoValidationError}
+                      </p>
+                    ) : hostPaymentHandle && !venmoValidationError ? (
+                      <p className="text-xs text-green-600 mt-1 font-semibold">
+                        ✓ Valid Venmo username
+                      </p>
+                    ) : (
+                      <p className="text-xs text-gray-500 mt-1">
+                        Guests will send payments to this Venmo account
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Venmo Preview */}
+                  {hostPaymentHandle && !venmoValidationError && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <p className="text-sm font-semibold text-blue-900 mb-2">
+                        Preview: Payment Link
+                      </p>
+                      <div className="bg-white rounded p-3 border border-blue-300">
+                        <p className="text-xs text-gray-600 mb-1">Guests will see:</p>
+                        <p className="text-sm text-gray-900">
+                          Send payment to: <span className="font-bold text-blue-600">{formatVenmoUsername(hostPaymentHandle)}</span>
+                        </p>
+                        <p className="text-xs text-blue-600 mt-2 italic">
+                          Clicking "Pay with Venmo" will open their Venmo app with your username pre-filled
+                        </p>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-2">
+                        ⚠️ Important: Make sure this username is correct. We cannot verify if it exists on Venmo.
+                      </p>
+                    </div>
+                  )}
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -191,7 +296,7 @@ export default function Home() {
 
                   <button
                     onClick={handleUploadReceipt}
-                    disabled={loading || !file || !hostName}
+                    disabled={loading || !file || !hostName || !!venmoValidationError}
                     className="w-full bg-indigo-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
                   >
                     {loading ? 'Processing...' : 'Upload Receipt'}

@@ -1,0 +1,50 @@
+name: Run Database Migrations
+
+on:
+  # Manual trigger
+  workflow_dispatch:
+  
+  # Auto-trigger on migration file changes
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/alembic/versions/**'
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Run migrations
+        working-directory: backend
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          echo "Running migrations on production database..."
+          echo "Database host: $(echo $DATABASE_URL | sed 's/.*@\([^:]*\).*/\1/')"
+          alembic upgrade head
+          echo "✅ Migrations completed successfully"
+      
+      - name: Verify migration
+        working-directory: backend
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          echo "Current migration version:"
+          alembic current
+

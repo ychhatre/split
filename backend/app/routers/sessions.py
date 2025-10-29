@@ -9,6 +9,9 @@ import uuid
 import qrcode
 from io import BytesIO
 import base64
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/session", tags=["sessions"])
 
@@ -22,6 +25,7 @@ async def create_session(session_data: SessionCreate, db: Session = Depends(get_
     """
     # Use provided session_id or generate new one
     session_id = session_data.session_id if hasattr(session_data, 'session_id') and session_data.session_id else str(uuid.uuid4())
+    logger.info(f"Creating session {session_id} for host: {session_data.host_name}")
     
     # Generate QR code
     qr_data = f"{FRONTEND_URL}/session/{session_id}"
@@ -35,6 +39,8 @@ async def create_session(session_data: SessionCreate, db: Session = Depends(get_
     qr_base64 = base64.b64encode(buffer.getvalue()).decode()
     qr_code_url = f"data:image/png;base64,{qr_base64}"
     
+    logger.debug(f"Generated QR code for session {session_id}")
+    
     # Create session
     db_session = SessionModel(
         id=session_id,
@@ -42,7 +48,7 @@ async def create_session(session_data: SessionCreate, db: Session = Depends(get_
         host_payment_handle=session_data.host_payment_handle,
         receipt_image_url=session_data.receipt_image_url,
         receipt_items=session_data.receipt_data.dict()["items"],
-        item_splits={},  # Initialize empty dict for tracking item splits
+        item_splits={},
         number_of_guests=session_data.number_of_guests if hasattr(session_data, 'number_of_guests') else 1,
         tax_amount=session_data.receipt_data.tax,
         tip_amount=session_data.receipt_data.tip,
@@ -55,21 +61,27 @@ async def create_session(session_data: SessionCreate, db: Session = Depends(get_
     db.commit()
     db.refresh(db_session)
     
+    logger.info(f"✓ Session created: {session_id} - Total: ${db_session.total}")
+    
     return db_session
 
 
 @router.get("/{session_id}", response_model=SessionResponse)
 async def get_session(session_id: str, db: Session = Depends(get_db)):
     """Get session details."""
+    logger.debug(f"Fetching session: {session_id}")
+    
     session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
     if not session:
+        logger.warning(f"Session not found: {session_id}")
         raise HTTPException(status_code=404, detail="Session not found")
     
     # Get claimed items and add to session object dynamically
     claimed_items = get_claimed_items_from_users(session_id, db)
-    # Convert to dict for response
     session_dict = {**session.__dict__}
     session_dict['claimed_items'] = claimed_items
+    
+    logger.info(f"✓ Retrieved session: {session_id}")
     return session_dict
 
 
@@ -79,9 +91,12 @@ async def join_session(session_id: str, user_data: UserJoin, db: Session = Depen
     Join a session as a user.
     Returns user ID for the session.
     """
+    logger.info(f"User '{user_data.name}' attempting to join session: {session_id}")
+    
     # Check if session exists
     session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
     if not session:
+        logger.warning(f"Session not found: {session_id}")
         raise HTTPException(status_code=404, detail="Session not found")
     
     # Create user
@@ -93,6 +108,8 @@ async def join_session(session_id: str, user_data: UserJoin, db: Session = Depen
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
+    
+    logger.info(f"✓ User '{user_data.name}' (ID: {db_user.id}) joined session {session_id}")
     
     return {"user_id": db_user.id, "message": "Joined session successfully"}
 
@@ -122,14 +139,18 @@ async def select_items(
     Select items for a user and calculate their totals.
     Simple approach: each user claims entire items (no splitting).
     """
+    logger.info(f"User {user_id} selecting items in session {session_id}: {selection.item_ids}")
+    
     # Get session
     session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
     if not session:
+        logger.warning(f"Session not found: {session_id}")
         raise HTTPException(status_code=404, detail="Session not found")
     
     # Get user
     user = db.query(SessionUser).filter(SessionUser.id == user_id).first()
     if not user:
+        logger.warning(f"User not found: {user_id}")
         raise HTTPException(status_code=404, detail="User not found")
     
     # Get currently claimed items
@@ -139,11 +160,11 @@ async def select_items(
     already_claimed = []
     for item_id in selection.item_ids:
         if item_id in claimed_items and claimed_items[item_id] != user_id:
-            # Find the item name for the error message
             item_name = next((item.get("name", item_id) for item in session.receipt_items if item.get("id") == item_id), item_id)
             already_claimed.append(item_name)
     
     if already_claimed:
+        logger.warning(f"Items already claimed by others: {already_claimed}")
         raise HTTPException(
             status_code=400,
             detail=f"Items already claimed by others: {', '.join(already_claimed)}"
@@ -170,6 +191,8 @@ async def select_items(
     db.commit()
     db.refresh(user)
     
+    logger.info(f"✓ User {user_id} selected {len(selection.item_ids)} items - Total: ${user.total}")
+    
     return user
 
 
@@ -181,12 +204,17 @@ async def mark_as_paid(
     db: Session = Depends(get_db)
 ):
     """Mark a user as paid."""
+    logger.info(f"Updating payment status for user {user_id} in session {session_id}: paid={payment_status.paid}")
+    
     user = db.query(SessionUser).filter(SessionUser.id == user_id).first()
     if not user:
+        logger.warning(f"User not found: {user_id}")
         raise HTTPException(status_code=404, detail="User not found")
     
     user.paid = payment_status.paid
     db.commit()
+    
+    logger.info(f"✓ Payment status updated for user {user_id}")
     
     return {"message": "Payment status updated"}
 
@@ -194,8 +222,11 @@ async def mark_as_paid(
 @router.get("/{session_id}/status", response_model=SessionStatusResponse)
 async def get_session_status(session_id: str, db: Session = Depends(get_db)):
     """Get full session status with all users and their payment status."""
+    logger.debug(f"Fetching session status: {session_id}")
+    
     session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
     if not session:
+        logger.warning(f"Session not found: {session_id}")
         raise HTTPException(status_code=404, detail="Session not found")
     
     users = db.query(SessionUser).filter(SessionUser.session_id == session_id).all()
@@ -204,6 +235,8 @@ async def get_session_status(session_id: str, db: Session = Depends(get_db)):
     claimed_items = get_claimed_items_from_users(session_id, db)
     session_dict = {**session.__dict__}
     session_dict['claimed_items'] = claimed_items
+    
+    logger.info(f"✓ Retrieved session status: {session_id} - {len(users)} users")
     
     return {
         "session": session_dict,

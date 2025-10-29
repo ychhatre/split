@@ -1,22 +1,25 @@
-# Use the official AWS Lambda Python runtime base image
-FROM --platform=linux/amd64 public.ecr.aws/lambda/python:3.11
+# Use Python 3.11 slim image
+FROM python:3.11-slim
 
-# Set the working directory
-WORKDIR ${LAMBDA_TASK_ROOT}
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
 COPY requirements.txt .
-
-# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the application code
+# Copy application code
 COPY app/ ./app/
 COPY alembic/ ./alembic/
-COPY alembic.ini .
+COPY alembic.ini ./
 
-# Create a lambda handler wrapper
-COPY lambda_handler.py .
+# Start uvicorn server
+# Render sets PORT environment variable
+CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
 
-# Set the CMD to your handler
-CMD ["lambda_handler.lambda_handler"]

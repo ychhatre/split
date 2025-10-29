@@ -1,4 +1,4 @@
-from openai import OpenAI
+from openai import AsyncOpenAI
 import os
 import json
 import base64
@@ -7,9 +7,58 @@ from typing import List, Dict, Any
 from pydantic import BaseModel, Field
 from typing import Optional
 from app.config import OPENAI_API_KEY 
+from io import BytesIO
 
 # Set up logger
 logger = logging.getLogger(__name__)
+
+
+def compress_image_for_vision(image_data: bytes, max_size: int = 2048) -> str:
+    """
+    Compress and resize image for OpenAI Vision API to improve speed.
+    Returns base64 encoded string.
+    
+    Args:
+        image_data: Raw image bytes
+        max_size: Maximum width/height in pixels (default 2048 for good quality)
+    
+    Returns:
+        Base64 encoded compressed image
+    """
+    try:
+        from PIL import Image
+        
+        # Open image
+        img = Image.open(BytesIO(image_data))
+        
+        # Convert to RGB if necessary (handles RGBA, grayscale, etc.)
+        if img.mode != 'RGB':
+            img = img.convert('RGB')
+        
+        # Resize if too large
+        if max(img.size) > max_size:
+            img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
+            logger.info(f"Resized image to {img.size}")
+        
+        # Compress to JPEG with good quality
+        buffer = BytesIO()
+        img.save(buffer, format='JPEG', quality=85, optimize=True)
+        compressed_data = buffer.getvalue()
+        
+        # Log compression results
+        original_size = len(image_data)
+        compressed_size = len(compressed_data)
+        reduction = (1 - compressed_size/original_size) * 100
+        logger.info(f"Image compression: {original_size/1024:.1f}KB → {compressed_size/1024:.1f}KB ({reduction:.1f}% reduction)")
+        
+        return base64.b64encode(compressed_data).decode('utf-8')
+        
+    except ImportError:
+        logger.warning("Pillow not installed, skipping image compression")
+        return base64.b64encode(image_data).decode('utf-8')
+    except Exception as e:
+        logger.warning(f"Image compression failed, using original: {e}")
+        return base64.b64encode(image_data).decode('utf-8')
 
 
 class ReceiptItem(BaseModel):
@@ -20,6 +69,7 @@ class ReceiptItem(BaseModel):
 
 
 class ReceiptData(BaseModel):
+    is_receipt: bool = True  # Whether the image is actually a receipt
     items: List[ReceiptItem] = Field(default_factory=list)
     subtotal: float = 0.0
     tax: float = 0.0
@@ -34,7 +84,7 @@ class ReceiptData(BaseModel):
 
 class ReceiptParser:
     def __init__(self):
-        self.client = OpenAI(api_key=OPENAI_API_KEY)
+        self.client = AsyncOpenAI(api_key=OPENAI_API_KEY)
     
     async def parse_receipt_image(self, image_base64: str) -> ReceiptData:
         """
@@ -45,16 +95,22 @@ class ReceiptParser:
         
         # Construct the system and user prompts
         system_prompt = """You are an expert at parsing restaurant receipts. 
-Extract the following information from the receipt image and return it as valid JSON:
 
-1. items: array of objects with 'id' (unique identifier), 'name' (item name), 'price' (item price), and 'quantity' (default 1)
-2. subtotal: total before tax and tip
-3. tax: tax amount
-4. tip: tip amount (if present)
-5. total: final total amount
+FIRST, validate if the image is actually a receipt (restaurant, store, or any purchase receipt).
+If it is NOT a receipt (e.g., random image, document, screenshot, etc.), set "is_receipt" to false.
+
+If it IS a receipt, extract the following information and return it as valid JSON:
+
+1. is_receipt: boolean indicating if this is actually a receipt (true/false)
+2. items: array of objects with 'id' (unique identifier), 'name' (item name), 'price' (item price), and 'quantity' (default 1)
+3. subtotal: total before tax and tip
+4. tax: tax amount
+5. tip: tip amount (if present, otherwise 0)
+6. total: final total amount
 
 Return ONLY valid JSON in this exact format (no markdown, no code blocks):
 {
+  "is_receipt": true,
   "items": [
     {"id": "item1", "name": "Item Name", "price": 12.99, "quantity": 1}
   ],
@@ -62,6 +118,16 @@ Return ONLY valid JSON in this exact format (no markdown, no code blocks):
   "tax": 4.50,
   "tip": 10.00,
   "total": 64.50
+}
+
+If the image is NOT a receipt, return:
+{
+  "is_receipt": false,
+  "items": [],
+  "subtotal": 0.0,
+  "tax": 0.0,
+  "tip": 0.0,
+  "total": 0.0
 }"""
 
         user_prompt = "Please extract the receipt information as specified."
@@ -70,7 +136,8 @@ Return ONLY valid JSON in this exact format (no markdown, no code blocks):
             logger.info("Sending request to OpenAI Vision API...")
             logger.info(f"Image base64 length: {len(image_base64)} characters")
             
-            response = self.client.chat.completions.create(
+            # Use async OpenAI client for better performance
+            response = await self.client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": system_prompt},
@@ -82,12 +149,14 @@ Return ONLY valid JSON in this exact format (no markdown, no code blocks):
                         {
                             "type": "image_url",
                             "image_url": {
-                                "url": f"data:image/jpeg;base64,{image_base64}"
+                                "url": f"data:image/jpeg;base64,{image_base64}",
+                                "detail": "high"  # Use high detail for better accuracy
                             }
                         }
                     ]}
                 ],
-                max_tokens=2000,
+                max_tokens=1500,  # Reduced from 2000 to speed up response
+                temperature=0.1,  # Low temperature for more consistent results
                 response_format={"type": "json_object"}
             )
             
@@ -105,6 +174,12 @@ Return ONLY valid JSON in this exact format (no markdown, no code blocks):
             
             logger.info("Validating with Pydantic...")
             receipt_data = ReceiptData(**raw_data)
+            
+            # Check if the image is actually a receipt
+            if not receipt_data.is_receipt:
+                logger.warning("Image is not a valid receipt")
+                raise ValueError("The uploaded image does not appear to be a receipt. Please upload a valid receipt image.")
+            
             logger.info(f"Validation successful. Items count: {len(receipt_data.items)}")
             logger.info(f"Totals - Subtotal: {receipt_data.subtotal}, Tax: {receipt_data.tax}, Tip: {receipt_data.tip}, Total: {receipt_data.total}")
             

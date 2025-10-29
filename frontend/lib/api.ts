@@ -1,5 +1,9 @@
 import axios from 'axios';
 
+// Backend URLs
+const PRODUCTION_API_URL = 'https://split-ujy6.onrender.com';
+const LOCAL_API_URL = 'http://localhost:8000';
+
 // Get the API URL based on environment
 const getApiUrl = () => {
   // If NEXT_PUBLIC_API_URL is explicitly set, use it (for production)
@@ -12,14 +16,14 @@ const getApiUrl = () => {
     const host = window.location.hostname;
     // If hostname is localhost or a local IP, use local backend
     if (host === 'localhost' || host === '127.0.0.1' || host.startsWith('192.168.') || host.startsWith('10.0.')) {
-      return `http://${host}:8000`;
+      return LOCAL_API_URL;
     }
-    // Otherwise, use the production Lambda URL
-    return 'https://tl4hbolniutrcuwr5cv4hyqvzq0zaevo.lambda-url.us-west-1.on.aws';
+    // Otherwise, use the production Render URL
+    return PRODUCTION_API_URL;
   }
   
   // Default fallback for server-side rendering
-  return 'http://localhost:8000';
+  return LOCAL_API_URL;
 };
 
 const API_BASE_URL = getApiUrl();
@@ -102,7 +106,13 @@ export const receiptAPI = {
   upload: async (file: File): Promise<ReceiptData> => {
     const formData = new FormData();
     formData.append('file', file);
-    const response = await api.post('/api/receipt/upload', formData);
+    
+    // Use axios directly (not the 'api' instance) to avoid Content-Type conflicts
+    // The browser will automatically set the correct multipart/form-data with boundary
+    const response = await axios.post(
+      `${API_BASE_URL}/api/receipt/upload`,
+      formData
+    );
     return response.data;
   },
 };
