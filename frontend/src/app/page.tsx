@@ -9,6 +9,7 @@ export default function Home() {
   const [hostName, setHostName] = useState('');
   const [hostPaymentHandle, setHostPaymentHandle] = useState('');
   const [numberOfGuests, setNumberOfGuests] = useState<number>(1);
+  const [guestInputValue, setGuestInputValue] = useState<string>('1');
   const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -122,13 +123,40 @@ export default function Home() {
                       Number of Guests
                     </label>
                     <input
-                      type="number"
-                      min="1"
-                      value={numberOfGuests}
-                      onChange={(e) => setNumberOfGuests(Math.max(1, parseInt(e.target.value) || 1))}
-                      placeholder="How many people are splitting the bill?"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={guestInputValue}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        // Allow empty string while typing
+                        if (value === '') {
+                          setGuestInputValue('');
+                          return;
+                        }
+                        // Only allow digits
+                        if (/^\d+$/.test(value)) {
+                          const num = parseInt(value, 10);
+                          if (num >= 1 && num <= 99) {
+                            setGuestInputValue(value);
+                            setNumberOfGuests(num);
+                          }
+                        }
+                      }}
+                      onBlur={(e) => {
+                        // Ensure valid value on blur
+                        const value = e.target.value;
+                        if (value === '' || parseInt(value, 10) < 1) {
+                          setNumberOfGuests(1);
+                          setGuestInputValue('1');
+                        }
+                      }}
+                      placeholder="Enter number of guests"
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-900"
                     />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Enter a number between 1 and 99
+                    </p>
                   </div>
 
                   <div>
