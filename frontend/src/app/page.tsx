@@ -17,10 +17,10 @@ export default function Home() {
   const [isDragOver, setIsDragOver] = useState(false);
   const router = useRouter();
 
-  // Validate Venmo username format
+  // Validate Venmo username format (required)
   const validateVenmoUsername = (username: string): { isValid: boolean; error: string } => {
     if (!username) {
-      return { isValid: true, error: '' }; // Empty is valid (optional field)
+      return { isValid: false, error: 'Venmo username is required' };
     }
 
     // Remove @ if present at the start
@@ -134,7 +134,7 @@ export default function Home() {
         receipt_data: receiptData,
         receipt_image_url: receiptData.image_url,
         session_id: receiptData.session_id,
-        host_payment_handle: hostPaymentHandle || undefined,
+        host_payment_handle: hostPaymentHandle,
         number_of_guests: numberOfGuests,
       });
 
@@ -234,7 +234,7 @@ export default function Home() {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Venmo Username (Optional)
+                      Venmo Username
                     </label>
                     <input
                       type="text"
@@ -345,7 +345,7 @@ export default function Home() {
 
                   <button
                     onClick={handleUploadReceipt}
-                    disabled={loading || !file || !hostName || !!venmoValidationError}
+                    disabled={loading || !file || !hostName || !!venmoValidationError || !hostPaymentHandle}
                     className="w-full bg-indigo-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
                   >
                     {loading ? 'Processing...' : 'Upload Receipt'}
@@ -463,7 +463,7 @@ export default function Home() {
 
                 <button
                   onClick={handleCreateSession}
-                  disabled={loading}
+                  disabled={loading || !!venmoValidationError || !hostPaymentHandle}
                   className="w-full bg-green-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
                 >
                   {loading ? 'Creating Session...' : 'Create Session & Share'}

@@ -1,6 +1,7 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import List, Optional, Dict, Any
 from datetime import datetime
+import re
 
 
 class ReceiptItemBase(BaseModel):
@@ -27,8 +28,25 @@ class SessionCreate(BaseModel):
     receipt_data: ReceiptData
     receipt_image_url: Optional[str] = None  # MinIO URL to the receipt image
     session_id: Optional[str] = None  # Session ID from receipt upload
-    host_payment_handle: Optional[str] = None
+    host_payment_handle: str
     number_of_guests: Optional[int] = 1
+
+    @field_validator('host_payment_handle')
+    @classmethod
+    def validate_venmo_username(cls, v: str) -> str:
+        if v is None or v == '':
+            raise ValueError('Venmo username is required')
+
+        clean_username = v[1:] if v.startswith('@') else v
+
+        venmo_pattern = re.compile(r'^[a-zA-Z0-9_-]{5,30}$')
+        if not venmo_pattern.match(clean_username):
+            raise ValueError(
+                'Invalid Venmo username format. Must be 5-30 characters and contain only '
+                'letters, numbers, hyphens, and underscores.'
+            )
+
+        return f'@{clean_username}' if not v.startswith('@') else v
 
 
 class SessionResponse(BaseModel):
