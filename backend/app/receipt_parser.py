@@ -93,7 +93,7 @@ class ReceiptParser:
         """
         logger.info("Starting receipt parsing...")
         
-        # Construct the system and user prompt
+        # Construct the system and user prompts
         system_prompt = """You are an expert at parsing restaurant receipts. 
 
 FIRST, validate if the image is actually a receipt (restaurant, store, or any purchase receipt).
